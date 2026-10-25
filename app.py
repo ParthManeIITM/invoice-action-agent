@@ -488,4 +488,43 @@ def glb_options():
     )
 
 
+# =====================================================================
+# Morphed Face Video (Myrna Loy -> Frederick Sanger)
+# =====================================================================
+
+@app.get("/morph.webm")
+@app.get("/6b91e535-2a4f-403d-b120-2dd1e308b94a.webm")
+def get_morph_video():
+    video_path = os.path.join(os.path.dirname(__file__), "morph.webm")
+    if not os.path.exists(video_path):
+        raise HTTPException(status_code=404, detail="Video file not found")
+    with open(video_path, "rb") as f:
+        content = f.read()
+    return Response(
+        content=content,
+        media_type="video/webm",
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+            "Content-Disposition": 'inline; filename="morph.webm"'
+        }
+    )
+
+
+@app.options("/morph.webm")
+@app.options("/6b91e535-2a4f-403d-b120-2dd1e308b94a.webm")
+def video_options():
+    return Response(
+        content=b"",
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
+
+
+
 
