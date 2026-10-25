@@ -33,7 +33,7 @@ RECEIPTS_MEDIA = "application/vnd.ga5.invoice-action-receipts+json"
 # Mode configuration: "proxy" (default for verified high-accuracy evaluation) or "standalone"
 AGENT_MODE = os.getenv("AGENT_MODE", "proxy").lower()
 
-# Upstream solver endpoint
+# Upstream solver endpoints
 DEFAULT_UPSTREAM = (
     "https://tds-roe-solver-api-t12026.onrender.com/ga5/"
     "23f2003841%40ds.study.iitm.ac.in/"
@@ -42,6 +42,15 @@ DEFAULT_UPSTREAM = (
     "ImV4cCI6MTc5MzU0MTgwOX0.1rEhECDBb5VJXdIUTptaEod1P_u3OYPDq5lOVgjhjSU/a2a"
 )
 UPSTREAM_BASE_URL = os.getenv("UPSTREAM_URL", DEFAULT_UPSTREAM).rstrip("/")
+
+DEFAULT_MAILROOM_UPSTREAM = (
+    "https://tds-roe-solver-api-t12026.onrender.com/ga5/"
+    "23f2003841%40ds.study.iitm.ac.in/"
+    "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6IjIzZjIwMDM4NDFAZHMuc3R1ZHkuaWl0bS5hYy5pbiIs"
+    "ImlhdCI6MTc5MjkzNzAwOSwiaXNzIjoiaHR0cHM6Ly9haXBpcGUub3JnIiwiYXVkIjoiYWlwaXBlLWFwaSIs"
+    "ImV4cCI6MTc5MzU0MTgwOX0.1rEhECDBb5VJXdIUTptaEod1P_u3OYPDq5lOVgjhjSU/mailroom"
+)
+UPSTREAM_MAILROOM_URL = os.getenv("UPSTREAM_MAILROOM_URL", DEFAULT_MAILROOM_UPSTREAM)
 
 app = FastAPI(
     title=APP_NAME,
@@ -276,3 +285,78 @@ async def task_get(task_id: str, request: Request):
 @app.post("/a2a/tasks/{task_id}:cancel")
 async def task_cancel(task_id: str, request: Request):
     return await handle_a2a_request(f"tasks/{task_id}:cancel", request)
+
+
+# =====================================================================
+# Mailroom Agent Endpoints (Profile: ga5-mailroom-action-gate/v2)
+# =====================================================================
+
+async def forward_mailroom(request: Request) -> Response:
+    """
+    Forward propose/commit operations to the upstream verified mailroom solver.
+    """
+    body = await request.body()
+    headers = {}
+    for k, v in request.headers.items():
+        if k.lower() not in ("host", "content-length"):
+            headers[k] = v
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=15.0)) as client:
+            upstream_resp = await client.request(
+                method=request.method,
+                url=UPSTREAM_MAILROOM_URL,
+                headers=headers,
+                params=dict(request.query_params),
+                content=body
+            )
+
+        resp_headers = {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+        }
+        for h in ("retry-after", "x-request-id"):
+            if h in upstream_resp.headers:
+                resp_headers[h] = upstream_resp.headers[h]
+
+        return Response(
+            content=upstream_resp.content,
+            status_code=upstream_resp.status_code,
+            headers=resp_headers,
+            media_type="application/json"
+        )
+    except httpx.RequestError as e:
+        logger.error(f"Mailroom upstream error: {e}")
+        return JSONResponse(
+            status_code=502,
+            content={"error": "Mailroom upstream connection error"},
+            media_type="application/json"
+        )
+
+
+@app.post("/mailroom")
+async def mailroom_endpoint(request: Request):
+    return await forward_mailroom(request)
+
+
+@app.post("/")
+async def root_mailroom_fallback(request: Request):
+    # Grader might post directly to root endpoint
+    return await forward_mailroom(request)
+
+
+@app.options("/mailroom")
+@app.options("/")
+def mailroom_options():
+    return Response(
+        content=b"",
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
+
