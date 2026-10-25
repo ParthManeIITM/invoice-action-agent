@@ -450,3 +450,42 @@ def incident_options():
     )
 
 
+# =====================================================================
+# 3D GLB Face Model (Marina Abramović)
+# =====================================================================
+
+@app.get("/marina_abramovic.glb")
+@app.get("/face.glb")
+def get_glb_model():
+    glb_path = os.path.join(os.path.dirname(__file__), "marina_abramovic.glb")
+    if not os.path.exists(glb_path):
+        raise HTTPException(status_code=404, detail="GLB model not found")
+    with open(glb_path, "rb") as f:
+        content = f.read()
+    return Response(
+        content=content,
+        media_type="model/gltf-binary",
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+            "Content-Disposition": 'inline; filename="marina_abramovic.glb"'
+        }
+    )
+
+
+@app.options("/marina_abramovic.glb")
+@app.options("/face.glb")
+def glb_options():
+    return Response(
+        content=b"",
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
+
+
+
